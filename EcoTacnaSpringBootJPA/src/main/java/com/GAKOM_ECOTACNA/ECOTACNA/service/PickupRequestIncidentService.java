@@ -123,7 +123,7 @@ public class PickupRequestIncidentService {
     }
 
     private PickupRequestIncidentResponse mapToResponse(PickupRequestIncident incident) {
-        return PickupRequestIncidentResponse.builder()
+        PickupRequestIncidentResponse.PickupRequestIncidentResponseBuilder builder = PickupRequestIncidentResponse.builder()
                 .id(incident.getId())
                 .pickupRequestId(incident.getPickupRequest().getId())
                 .reasonCode(incident.getReasonCode())
@@ -131,7 +131,19 @@ public class PickupRequestIncidentService {
                 .customReason(incident.getCustomReason())
                 .description(incident.getDescription())
                 .status(incident.getStatus())
-                .createdAt(incident.getCreatedAt())
-                .build();
+                .createdAt(incident.getCreatedAt());
+
+        if (incident.getReporterUser() != null) {
+            String name = ((incident.getReporterUser().getFirstName() != null ? incident.getReporterUser().getFirstName() : "") + " " +
+                          (incident.getReporterUser().getLastName() != null ? incident.getReporterUser().getLastName() : "")).trim();
+            if (name.isEmpty()) {
+                name = "Usuario";
+            }
+            builder.reporterName(name)
+                   .reporterEmail(incident.getReporterUser().getEmail())
+                   .reporterRole(incident.getReporterUser().getRole() != null ? incident.getReporterUser().getRole().name() : null);
+        }
+
+        return builder.build();
     }
 }

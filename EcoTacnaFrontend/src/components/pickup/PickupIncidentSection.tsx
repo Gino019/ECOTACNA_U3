@@ -26,6 +26,15 @@ export const PickupIncidentSection = ({ incidents, observaciones, showWhenEmpty 
     return null;
   }
 
+  const getFriendlyRole = (role?: string) => {
+    if (!role) return "";
+    const cleanRole = role.replace("ROLE_", "");
+    if (cleanRole === "GENERADOR") return "Generador";
+    if (cleanRole === "RECOLECTOR") return "Recolector";
+    if (cleanRole === "ADMIN") return "Administrador";
+    return cleanRole;
+  };
+
   const formatDateTime = (dateStr: string) => {
     if (!dateStr) return "";
     return format(new Date(dateStr), "dd/MM/yyyy HH:mm", { locale: es });
@@ -48,7 +57,7 @@ export const PickupIncidentSection = ({ incidents, observaciones, showWhenEmpty 
               </div>
               {inc.description && <p className="text-muted-foreground italic mb-1">{inc.description}</p>}
               <div className="text-xs font-medium bg-white px-2 py-0.5 rounded border inline-block text-muted-foreground">
-                Estado: {inc.status} {inc.reporterRole ? `| Reportado por: ${inc.reporterRole}` : ""}
+                Estado: {inc.status} {inc.reporterRole ? `| Reportado por: ${getFriendlyRole(inc.reporterRole)}` : ""}
               </div>
             </div>
           ))
