@@ -43,18 +43,21 @@ public class PickupRequestIncidentService {
             throw new BusinessException("Esta solicitud ya tiene una incidencia reportada.");
         }
 
-        // Validación de estado de la solicitud
+        // Validación de estado de la solicitud o si tiene asignación
         PickupRequestStatus status = pickupRequest.getStatus();
+        boolean hasAssignedCollector = com.GAKOM_ECOTACNA.ECOTACNA.mapper.ModelMapper.hasAssignedCollector(pickupRequest);
         if (status != PickupRequestStatus.EN_RUTA && 
             status != PickupRequestStatus.COMPLETADO && 
             status != PickupRequestStatus.CANCELADO && 
             status != PickupRequestStatus.PROGRAMADO &&
-            status != PickupRequestStatus.EN_SITIO) {
+            status != PickupRequestStatus.EN_SITIO &&
+            !(status == PickupRequestStatus.PENDIENTE && hasAssignedCollector)) {
             throw new BusinessException("No se pueden reportar incidencias para solicitudes en estado " + status.name());
         }
 
         // Validación del DTO
-        if ("OTROS".equals(requestDto.getReasonCode()) && (requestDto.getCustomReason() == null || requestDto.getCustomReason().trim().isEmpty())) {
+        if (("OTROS".equals(requestDto.getReasonCode()) || "OTRO".equals(requestDto.getReasonCode())) && 
+            (requestDto.getCustomReason() == null || requestDto.getCustomReason().trim().isEmpty())) {
             throw new BusinessException("El motivo personalizado es obligatorio cuando se selecciona 'Otros'");
         }
 
@@ -74,10 +77,11 @@ public class PickupRequestIncidentService {
 
         // Cambiar la solicitud a estado final rojo para liberar al recolector
         pickupRequest.setStatus(PickupRequestStatus.CANCELADO);
+        pickupRequest.setEstadoPago("NO_APLICA");
         
         // Agregar el motivo de la incidencia a las observaciones para el recolector
         String nuevaObservacion = "Incidencia reportada por restaurante | Motivo: " + 
-            (requestDto.getReasonCode().equals("OTROS") ? requestDto.getCustomReason() : label) + 
+            (("OTROS".equals(requestDto.getReasonCode()) || "OTRO".equals(requestDto.getReasonCode())) ? requestDto.getCustomReason() : label) + 
             (requestDto.getDescription() != null && !requestDto.getDescription().isBlank() ? " | Descripción: " + requestDto.getDescription() : "");
             
         if (pickupRequest.getObservaciones() == null || pickupRequest.getObservaciones().isEmpty()) {
@@ -99,7 +103,32 @@ public class PickupRequestIncidentService {
         PickupRequest pickupRequest = pickupRequestRepository.findById(requestId)
                 .orElseThrow(() -> new BusinessException("Solicitud no encontrada con ID: " + requestId));
 
-        if (pickupRequest.getCompany() == null || !pickupRequest.getCompany().getId().equals(user.getCompany().getId())) {
+        boolean isGeneratorOwner = pickupRequest.getCompany() != null && 
+                                    user.getCompany() != null && 
+                                    java.util.Objects.equals(pickupRequest.getCompany().getId(), user.getCompany().getId());
+
+        boolean isAssignedCollectorUser = pickupRequest.getCollectorUserId() != null && 
+                                          java.util.Objects.equals(pickupRequest.getCollectorUserId(), user.getId());
+
+        boolean isAssignedCollectorCompany = false;
+        if (user.getCompany() != null) {
+            if (pickupRequest.getTransportUnit() != null && 
+                pickupRequest.getTransportUnit().getCollectorCompany() != null && 
+                java.util.Objects.equals(pickupRequest.getTransportUnit().getCollectorCompany().getId(), user.getCompany().getId())) {
+                isAssignedCollectorCompany = true;
+            }
+            if (!isAssignedCollectorCompany && pickupRequest.getCollectorUserId() != null) {
+                User assignedCollector = userRepository.findById(pickupRequest.getCollectorUserId()).orElse(null);
+                if (assignedCollector != null && assignedCollector.getCompany() != null && 
+                    java.util.Objects.equals(assignedCollector.getCompany().getId(), user.getCompany().getId())) {
+                    isAssignedCollectorCompany = true;
+                }
+            }
+        }
+
+        boolean isAdmin = user.getRole() == com.GAKOM_ECOTACNA.ECOTACNA.model.Role.ADMIN;
+
+        if (!isGeneratorOwner && !isAssignedCollectorUser && !isAssignedCollectorCompany && !isAdmin) {
             throw new BusinessException("No tienes permisos para ver incidencias en esta solicitud");
         }
 
@@ -112,13 +141,19 @@ public class PickupRequestIncidentService {
     private String getLabelFromCode(String code) {
         return switch (code) {
             case "RECOLECTOR_NO_LLEGO" -> "El recolector no llegó";
+            case "RECOLECTOR_LLEGO_TARDE" -> "El recolector llegó tarde";
+            case "RECOLECTOR_NO_ACEPTO_CONDICIONES" -> "El recolector no aceptó las condiciones acordadas";
+            case "RECOLECTOR_NO_TENIA_CAPACIDAD" -> "El recolector no tenía capacidad suficiente";
+            case "RECOLECTOR_NO_TRAJO_UNIDAD_ADECUADA" -> "El recolector no trajo una unidad adecuada";
+            case "NO_SE_CONCRETO_RECOJO" -> "No se concretó el recojo";
+            case "ERROR_EN_DATOS_SOLICITUD" -> "Error en los datos de la solicitud";
+            case "OTROS", "OTRO" -> "Otro motivo";
             case "CANTIDAD_NO_COINCIDE" -> "La cantidad registrada no coincide";
             case "NO_RECIBI_PAGO" -> "No recibí el pago acordado";
             case "RECOJO_INCOMPLETO" -> "El recojo fue incompleto";
             case "MALA_CONDUCTA" -> "Mala conducta o trato inadecuado";
             case "PROBLEMA_HORARIO" -> "Problema con el horario acordado";
-            case "OTROS" -> "Otros";
-            default -> "Motivo desconocido";
+            default -> code != null ? code.replace("_", " ") : "Motivo desconocido";
         };
     }
 

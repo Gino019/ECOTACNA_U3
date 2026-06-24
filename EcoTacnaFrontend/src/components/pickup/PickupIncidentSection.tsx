@@ -51,7 +51,7 @@ export const PickupIncidentSection = ({ incidents, observaciones, showWhenEmpty 
             <div key={inc.id} className="bg-destructive/5 border border-destructive/20 p-3 rounded-md text-sm">
               <div className="flex justify-between items-start mb-1">
                 <span className="font-semibold text-destructive">
-                  Motivo: {inc.reasonCode === "OTROS" ? `Otros - ${inc.customReason}` : inc.reasonLabel}
+                  Motivo: {(inc.reasonCode === "OTRO" || inc.reasonCode === "OTROS") ? `Otro motivo${inc.customReason ? ` - ${inc.customReason}` : ""}` : (inc.reasonLabel || inc.reason || "Motivo no especificado")}
                 </span>
                 <span className="text-xs text-muted-foreground">{formatDateTime(inc.createdAt)}</span>
               </div>

@@ -165,5 +165,11 @@ export const recolectorApi = {
       throw new Error("No se pudo exportar el historial de solicitudes.");
     }
     return response.blob();
+  },
+
+  listarIncidenciasSolicitud: async (solicitudId: number) => {
+    return apiClient<any[]>(`/recolector/solicitudes/${solicitudId}/incidencias`, {
+      method: "GET"
+    });
   }
 };

@@ -5,6 +5,13 @@ import com.GAKOM_ECOTACNA.ECOTACNA.model.*;
 
 public class ModelMapper {
 
+    public static boolean hasAssignedCollector(PickupRequest request) {
+        if (request == null) {
+            return false;
+        }
+        return request.getCollectorUserId() != null || request.getTransportUnit() != null;
+    }
+
     public static AuditLogResponse toAuditLogResponse(AuditLog log) {
         if (log == null) {
             return null;
@@ -59,10 +66,13 @@ public class ModelMapper {
         
         if (request.getTransportUnit() != null) {
             dto.setTransportePlaca(request.getTransportUnit().getPlate());
+            dto.setTransportUnitId(request.getTransportUnit().getId());
         }
         if (request.getCollectorUserId() != null) {
             dto.setRecolectorAsignado(request.getCollectorUserId().toString());
+            dto.setCollectorUserId(request.getCollectorUserId());
         }
+        dto.setHasAssignedCollector(ModelMapper.hasAssignedCollector(request));
         
         dto.setPickupLatitude(request.getPickupLatitude());
         dto.setPickupLongitude(request.getPickupLongitude());

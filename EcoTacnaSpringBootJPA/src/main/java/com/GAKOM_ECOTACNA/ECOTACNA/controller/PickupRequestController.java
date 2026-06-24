@@ -35,18 +35,21 @@ public class PickupRequestController {
     private final HistorialExcelService historialExcelService;
     private final com.GAKOM_ECOTACNA.ECOTACNA.service.StorageService storageService;
     private final com.GAKOM_ECOTACNA.ECOTACNA.service.PickupRecommendationService pickupRecommendationService;
+    private final com.GAKOM_ECOTACNA.ECOTACNA.service.PickupRequestIncidentService incidentService;
 
     @Autowired
     public PickupRequestController(PickupRequestService pickupRequestService, 
                                    ConstanciaPdfService constanciaPdfService,
                                    HistorialExcelService historialExcelService,
                                    com.GAKOM_ECOTACNA.ECOTACNA.service.StorageService storageService,
-                                   com.GAKOM_ECOTACNA.ECOTACNA.service.PickupRecommendationService pickupRecommendationService) {
+                                   com.GAKOM_ECOTACNA.ECOTACNA.service.PickupRecommendationService pickupRecommendationService,
+                                   com.GAKOM_ECOTACNA.ECOTACNA.service.PickupRequestIncidentService incidentService) {
         this.pickupRequestService = pickupRequestService;
         this.constanciaPdfService = constanciaPdfService;
         this.historialExcelService = historialExcelService;
         this.storageService = storageService;
         this.pickupRecommendationService = pickupRecommendationService;
+        this.incidentService = incidentService;
     }
 
     @GetMapping("/api/empresa/solicitudes")
@@ -314,5 +317,14 @@ public class PickupRequestController {
         } catch (Exception e) {
             throw new com.GAKOM_ECOTACNA.ECOTACNA.exception.BusinessException("Error al generar Excel: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/api/recolector/solicitudes/{id}/incidencias")
+    public ResponseEntity<ApiResponse<List<com.GAKOM_ECOTACNA.ECOTACNA.dto.PickupRequestIncidentResponse>>> getIncidentsForCollector(
+            @PathVariable("id") Long id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        List<com.GAKOM_ECOTACNA.ECOTACNA.dto.PickupRequestIncidentResponse> response = 
+                incidentService.getIncidentsByRequestId(id, principal.getUser().getEmail());
+        return ResponseEntity.ok(new ApiResponse<>(true, "Incidencias de la solicitud", response));
     }
 }

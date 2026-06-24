@@ -51,6 +51,10 @@ public class PickupRequestResponse {
     
     private java.util.List<PickupRequestIncidentResponse> incidencias;
 
+    private Long collectorUserId;
+    private Long transportUnitId;
+    private Boolean hasAssignedCollector;
+
     // Campos de IA / Recomendación
     private Boolean aiRecommended;
     private Integer aiRank;

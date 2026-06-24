@@ -641,6 +641,12 @@ public class PickupRequestService {
 
     @Transactional(readOnly = true)
     public com.GAKOM_ECOTACNA.ECOTACNA.dto.PickupRequestResponse enrichPickupRequestResponse(com.GAKOM_ECOTACNA.ECOTACNA.dto.PickupRequestResponse response, PickupRequest request) {
+        response.setHasAssignedCollector(com.GAKOM_ECOTACNA.ECOTACNA.mapper.ModelMapper.hasAssignedCollector(request));
+        response.setCollectorUserId(request.getCollectorUserId());
+        if (request.getTransportUnit() != null) {
+            response.setTransportUnitId(request.getTransportUnit().getId());
+        }
+
         if (request.getCollectorUserId() != null) {
             userRepository.findById(request.getCollectorUserId()).ifPresent(user -> {
                 Company recolectorCompany = user.getCompany();
@@ -683,8 +689,8 @@ public class PickupRequestService {
                     .build();
                 if (inc.getReporterUser() != null) {
                     dto.setReporterName((inc.getReporterUser().getFirstName() != null ? inc.getReporterUser().getFirstName() : "") + " " + (inc.getReporterUser().getLastName() != null ? inc.getReporterUser().getLastName() : ""));
-                    if (dto.getReporterName().trim().isEmpty()) {
-                        dto.setReporterName("Recolector");
+                    if (dto.getReporterName() == null || dto.getReporterName().trim().isEmpty()) {
+                        dto.setReporterName(inc.getReporterUser().getRole() == com.GAKOM_ECOTACNA.ECOTACNA.model.Role.RECOLECTOR ? "Recolector" : "Generador");
                     }
                     dto.setReporterEmail(inc.getReporterUser().getEmail());
                     dto.setReporterRole(inc.getReporterUser().getRole() != null ? inc.getReporterUser().getRole().name() : null);

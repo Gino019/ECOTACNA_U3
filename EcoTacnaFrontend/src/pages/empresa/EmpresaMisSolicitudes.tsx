@@ -107,7 +107,7 @@ export default function EmpresaMisSolicitudes() {
       toast.error("Seleccione un motivo de incidencia.");
       return;
     }
-    if (incidenciaReasonCode === "OTROS" && !incidenciaCustomReason.trim()) {
+    if (incidenciaReasonCode === "OTRO" && !incidenciaCustomReason.trim()) {
       toast.error("Describa el motivo personalizado.");
       return;
     }
@@ -115,7 +115,7 @@ export default function EmpresaMisSolicitudes() {
     try {
       const payload = {
         reasonCode: incidenciaReasonCode,
-        customReason: incidenciaReasonCode === "OTROS" ? incidenciaCustomReason : undefined,
+        customReason: incidenciaReasonCode === "OTRO" ? incidenciaCustomReason : undefined,
         description: incidenciaDescription || undefined
       };
       const res = await empresaApi.crearIncidenciaSolicitud(solicitudActiva.id, payload);
@@ -537,15 +537,16 @@ export default function EmpresaMisSolicitudes() {
               >
                 <option value="">-- Seleccione un motivo --</option>
                 <option value="RECOLECTOR_NO_LLEGO">El recolector no llegó</option>
-                <option value="CANTIDAD_NO_COINCIDE">La cantidad registrada no coincide</option>
-                <option value="NO_RECIBI_PAGO">No recibí el pago acordado</option>
-                <option value="RECOJO_INCOMPLETO">El recojo fue incompleto</option>
-                <option value="MALA_CONDUCTA">Mala conducta o trato inadecuado</option>
-                <option value="PROBLEMA_HORARIO">Problema con el horario acordado</option>
-                <option value="OTROS">Otros</option>
+                <option value="RECOLECTOR_LLEGO_TARDE">El recolector llegó tarde</option>
+                <option value="RECOLECTOR_NO_ACEPTO_CONDICIONES">El recolector no aceptó las condiciones acordadas</option>
+                <option value="RECOLECTOR_NO_TENIA_CAPACIDAD">El recolector no tenía capacidad suficiente</option>
+                <option value="RECOLECTOR_NO_TRAJO_UNIDAD_ADECUADA">El recolector no trajo una unidad adecuada</option>
+                <option value="NO_SE_CONCRETO_RECOJO">No se concretó el recojo</option>
+                <option value="ERROR_EN_DATOS_SOLICITUD">Error en los datos de la solicitud</option>
+                <option value="OTRO">Otro motivo</option>
               </select>
             </div>
-            {incidenciaReasonCode === "OTROS" && (
+            {incidenciaReasonCode === "OTRO" && (
               <div className="space-y-1">
                 <label className="text-sm font-medium">Describe el motivo <span className="text-destructive">*</span></label>
                 <input 
@@ -588,6 +589,24 @@ export default function EmpresaMisSolicitudes() {
             const s = selectedSeguimiento;
             const paso = getStepFromEstado(s.estado, s.estadoPago, false);
             const esPendiente = (s.estado || "").toUpperCase() === "PENDIENTE";
+
+            const hasCollector =
+              s.hasAssignedCollector === true ||
+              Boolean(s.collectorUserId) ||
+              Boolean(s.collectorCompanyId) ||
+              Boolean(s.transportUnitId) ||
+              Boolean(s.recolectorAsignado);
+
+            const isFinalState = ["CANCELADO", "COMPLETADO", "EXPIRADO"].includes((s.status ?? s.estado ?? "").toUpperCase());
+            
+            const solicitudIncidencias = Array.isArray(s.incidencias) ? s.incidencias : [];
+            const modalIncidencias = Array.isArray(incidencias) ? incidencias : [];
+            const hasPriorIncidents = solicitudIncidencias.length > 0 || modalIncidencias.length > 0;
+
+            const canReportIncident = hasCollector && !isFinalState && !hasPriorIncidents &&
+              ["PENDIENTE", "PROGRAMADO", "EN_RUTA", "EN_CAMINO", "EN CAMINO", "EN_SITIO"].includes((s.status ?? s.estado ?? "").toUpperCase());
+
+            const canSimpleCancel = !hasCollector && (s.status ?? s.estado ?? "").toUpperCase() === "PENDIENTE";
 
             const litrosVisual = s.litrosConfirmados != null ? s.litrosConfirmados : s.volumenAproximado;
             const precioVisual = s.precioPorLitro != null ? s.precioPorLitro : s.precioOfertadoPorLitro;
@@ -807,7 +826,7 @@ export default function EmpresaMisSolicitudes() {
 
 
                     <div className="flex flex-col sm:flex-row justify-between w-full items-center">
-                      {["PROGRAMADO", "EN_RUTA", "EN_CAMINO", "EN CAMINO", "EN_SITIO"].includes((s.status ?? s.estado ?? "").toUpperCase()) && incidencias.length === 0 ? (
+                      {canReportIncident ? (
                         <Button variant="destructive" className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto mb-3 sm:mb-0" onClick={openReportIncidencia}>
                           Reportar incidencia
                         </Button>
@@ -815,8 +834,8 @@ export default function EmpresaMisSolicitudes() {
                         <div />
                       )}
                       <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                        {/* Cancelar solicitud — solo si PENDIENTE */}
-                        {esPendiente ? (
+                        {/* Cancelar solicitud — solo si PENDIENTE y sin recolector */}
+                        {canSimpleCancel ? (
                           <Button
                             variant="ghost"
                             className="text-destructive hover:text-destructive hover:bg-destructive/10 underline text-sm w-full sm:w-auto"
