@@ -1,0 +1,304 @@
+NUEVA ETAPA 3 — Detalle, constancia PDF y exportación Excel en “Mis solicitudes”
+
+Ejecutar esta etapa solo después de que la Etapa 2 funcione correctamente.
+
+No audites todo.
+No toques pagos de suscripción.
+No toques login, ApiPeruDev, BCrypt, SecurityConfig, registro, aprobación administrativa, panel admin ni módulo recolector salvo que sea estrictamente necesario para leer datos ya existentes.
+No cambies la lógica de aceptación de recojos.
+No cambies la lógica de confirmación de pago de la Etapa 2 salvo que falte exponer datos en el historial.
+
+Contexto:
+La Etapa 2 ya debe dejar solicitudes con:
+
+* estado del recojo = COMPLETADO;
+* estadoPago = PAGADO;
+* litrosConfirmados;
+* precioPorLitro;
+* montoTotal;
+* fechaConfirmacionPago;
+* observacionPago;
+* recolector asignado;
+* unidad asignada.
+
+Problema actual:
+En `/empresa/mis-solicitudes`, la última columna muestra “Solo lectura”. Eso no sirve.
+
+Objetivo general:
+Convertir esa última columna en una acción real llamada:
+
+“Ver detalle”
+
+Desde el detalle se debe poder visualizar la constancia del pago y descargarla como PDF cuando la solicitud esté COMPLETADA/PAGADA.
+
+Además, en el módulo “Mis solicitudes”, debe existir una opción para exportar el historial por rango de fechas en Excel.
+
+Dividir esta etapa internamente en 3 partes pequeñas:
+
+PARTE 3.1 — Ver detalle
+
+Objetivo:
+Cambiar la columna “Solo lectura” por “Ver detalle”.
+
+Frontend:
+Revisar solo:
+
+* `EmpresaMisSolicitudes.tsx`
+* `empresaApi.ts`
+* `types.ts`
+
+Backend solo si falta información:
+
+* `PickupRequestController.java`
+* `PickupRequestService.java`
+* DTO de historial/detalle de solicitud
+
+La tabla debe cambiar:
+
+Antes:
+
+* Solo lectura
+
+Después:
+
+* Ver detalle
+
+Cada fila debe tener botón:
+“Ver detalle”
+
+Al hacer clic, abrir modal con secciones:
+
+1. Datos del recojo:
+
+   * ID
+   * fecha solicitud
+   * fecha programada
+   * estado
+   * dirección
+   * observaciones
+   * volumen solicitado
+
+2. Datos del restaurante:
+
+   * razón social
+   * RUC
+   * correo
+
+3. Datos del recolector:
+
+   * razón social
+   * RUC
+   * correo
+   * teléfono
+
+4. Unidad asignada:
+
+   * placa
+   * marca
+   * modelo
+   * tipoUnidad
+   * capacidadLitros
+
+5. Pago operativo:
+
+   * estadoPago
+   * litrosConfirmados
+   * precioPorLitro
+   * montoTotal
+   * fechaConfirmacionPago
+   * observacionPago
+
+Si la solicitud no está pagada:
+Mostrar:
+“Constancia no disponible hasta confirmar el pago.”
+
+PARTE 3.2 — Constancia PDF desde el detalle
+
+Objetivo:
+Dentro del modal de detalle, si la solicitud está COMPLETADA y PAGADA, mostrar botón:
+
+“Descargar constancia PDF”
+
+Backend:
+Crear endpoint:
+
+GET `/api/empresa/solicitudes/{solicitudId}/constancia`
+
+Debe devolver:
+application/pdf
+
+Validaciones:
+
+1. Usuario autenticado.
+2. La solicitud pertenece a la empresa autenticada.
+3. La solicitud está COMPLETADA.
+4. estadoPago = PAGADO.
+5. No permitir descargar constancias de otra empresa.
+
+PDF:
+Generar una constancia simple con diseño EcoTacna.
+
+Contenido mínimo:
+
+* Título: Constancia de Recojo y Pago EcoTacna
+* Código: ECO-{solicitudId}-{año}
+* Fecha de emisión
+* Datos del restaurante/generador:
+
+  * razón social
+  * RUC
+  * correo
+  * dirección
+* Datos del recolector:
+
+  * razón social
+  * RUC
+  * correo
+  * teléfono
+* Datos del vehículo:
+
+  * placa
+  * marca
+  * modelo
+  * tipoUnidad
+  * capacidadLitros
+* Datos del recojo:
+
+  * fecha solicitud
+  * fecha programada
+  * fecha confirmación
+  * dirección
+  * observaciones
+* Datos del pago operativo:
+
+  * litros confirmados
+  * precio por litro
+  * monto total
+  * estado PAGADO
+* Texto final:
+  “Esta constancia acredita el recojo de aceite vegetal usado registrado en la plataforma EcoTacna. No constituye comprobante tributario.”
+
+Frontend:
+En el modal:
+
+* Si está COMPLETADA/PAGADA, mostrar “Descargar constancia PDF”.
+* Si no, mostrar “Constancia no disponible”.
+* Descargar como Blob con nombre:
+  `constancia-ecotacna-solicitud-{id}.pdf`
+
+Importante:
+No intentar guardar en una ruta local desde backend.
+El navegador gestiona la ubicación de descarga. Si el usuario quiere elegir carpeta, debe tener activada la opción del navegador para preguntar dónde guardar.
+
+PARTE 3.3 — Exportar historial Excel por rango
+
+Objetivo:
+Agregar botón en `/empresa/mis-solicitudes`:
+
+“Exportar Excel”
+
+Al hacer clic, abrir modal con:
+
+* Fecha desde
+* Fecha hasta
+* Cancelar
+* Exportar
+
+Backend:
+Crear endpoint:
+
+GET `/api/empresa/solicitudes/exportar?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`
+
+Debe devolver:
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+
+Validaciones:
+
+1. Usuario autenticado.
+2. Exportar solo solicitudes de la empresa autenticada.
+3. desde obligatorio.
+4. hasta obligatorio.
+5. desde <= hasta.
+6. Rango máximo recomendado: 1 año.
+
+Columnas del Excel:
+
+* ID
+* Fecha solicitud
+* Fecha programada
+* Estado recojo
+* Dirección
+* Observaciones
+* Volumen solicitado
+* Litros confirmados
+* Precio por litro
+* Monto total
+* Estado pago
+* Empresa recolectora
+* RUC recolectora
+* Unidad
+* Placa
+* Fecha confirmación
+
+Diseño Excel:
+
+* Hoja: Historial EcoTacna
+* Título: Reporte de Solicitudes EcoTacna
+* Subtítulo con rango de fechas
+* Datos de la empresa generadora
+* Encabezados legibles
+* Anchos de columna ajustados
+* Monto en formato moneda
+* Litros en formato numérico
+* Sin textos de prueba
+
+Frontend:
+
+* Descargar como Blob.
+* Nombre:
+  `historial-ecotacna-{desde}-{hasta}.xlsx`
+
+No usar CSV.
+Debe ser .xlsx.
+
+Pruebas manuales:
+
+1. Entrar como restaurante.
+2. Ir a `/empresa/mis-solicitudes`.
+3. Confirmar que no aparece “Solo lectura”.
+4. Confirmar columna “Ver detalle”.
+5. Abrir una solicitud PROGRAMADO.
+6. Verificar que muestra detalle, pero no permite constancia.
+7. Abrir una solicitud COMPLETADA/PAGADA.
+8. Verificar que muestra botón “Descargar constancia PDF”.
+9. Descargar PDF.
+10. Abrir PDF y verificar datos.
+11. Presionar “Exportar Excel”.
+12. Seleccionar rango.
+13. Descargar Excel.
+14. Abrir Excel y verificar que contiene solo solicitudes de la empresa autenticada.
+
+Comandos:
+
+Frontend:
+npm run lint
+npx tsc --noEmit
+npm run build
+
+Backend:
+.\mvnw.cmd clean compile
+.\mvnw.cmd test
+
+Entrega final de Nueva Etapa 3:
+
+1. Archivos modificados.
+2. Endpoint usado para detalle.
+3. Endpoint PDF creado.
+4. Endpoint Excel creado.
+5. Evidencia visual de “Ver detalle”.
+6. Evidencia visual del modal.
+7. Evidencia del PDF generado.
+8. Evidencia del Excel generado.
+9. Confirmación de que una solicitud no pagada no permite constancia.
+10. Confirmación de que solo se exportan datos de la empresa autenticada.
+11. Confirmación de que no se tocó login, ApiPeruDev, BCrypt, SecurityConfig ni pagos de suscripción.

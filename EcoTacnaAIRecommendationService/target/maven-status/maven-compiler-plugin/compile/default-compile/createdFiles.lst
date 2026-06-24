@@ -1,0 +1,15 @@
+com\ecotacna\ai\dto\CollectorContext$CollectorContextBuilder.class
+com\ecotacna\ai\dto\AiRecojoRecommendationItem.class
+com\ecotacna\ai\dto\RecojoCandidateRequest$RecojoCandidateRequestBuilder.class
+com\ecotacna\ai\service\GeminiAiClient.class
+com\ecotacna\ai\service\RecojoBaseScoringService.class
+com\ecotacna\ai\controller\AiRecojoRecommendationController.class
+com\ecotacna\ai\dto\AiRecojoRecommendationItem$AiRecojoRecommendationItemBuilder.class
+com\ecotacna\ai\dto\AiRecojoRecommendationResponse$AiRecojoRecommendationResponseBuilder.class
+com\ecotacna\ai\dto\AiRecojoRecommendationRequest$AiRecojoRecommendationRequestBuilder.class
+com\ecotacna\ai\dto\CollectorContext.class
+com\ecotacna\ai\service\RecommendationService.class
+com\ecotacna\ai\dto\RecojoCandidateRequest.class
+com\ecotacna\ai\dto\AiRecojoRecommendationResponse.class
+com\ecotacna\ai\AiRecommendationApplication.class
+com\ecotacna\ai\dto\AiRecojoRecommendationRequest.class

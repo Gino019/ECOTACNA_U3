@@ -1,0 +1,4 @@
+# Google reCAPTCHA v2 Checkbox Configuration
+CAPTCHA_ENABLED=true
+CAPTCHA_PROVIDER=recaptcha_v2
+RECAPTCHA_SECRET_KEY=colocar_secret_key_real_de_recaptcha_v2_checkbox

@@ -1,0 +1,196 @@
+PLAN R3 — PDF y Excel para Historial de recojos del Recolector
+
+Ejecutar solo después de validar R2.
+
+No audites todo.
+No toques ApiPeruDev, login, BCrypt, SecurityConfig, registro, aprobación administrativa, pagos de suscripción ni lógica de aceptación.
+
+Contexto:
+Ya existe en el restaurante la funcionalidad de:
+
+* Ver detalle
+* Descargar constancia PDF
+* Exportar Excel
+
+Ahora se necesita la funcionalidad equivalente para el recolector, pero filtrada por el recolector autenticado.
+
+Objetivo:
+En “Historial de recojos” del Panel Recolector:
+
+1. Desde el detalle de un recojo COMPLETADO/PAGADO, descargar la constancia PDF.
+2. Exportar a Excel el historial del recolector por rango de fechas.
+
+Backend a revisar solo:
+
+* ConstanciaPdfService.java
+* HistorialExcelService.java
+* PickupRequestController.java
+* PickupRequestService.java
+* PickupRequestRepository.java
+* DTO de historial del recolector
+
+Frontend a revisar solo:
+
+* RecolectorHistorial.tsx
+* recolectorApi.ts
+* types.ts
+
+Regla clave:
+Reutilizar lo existente para restaurante cuando sea posible.
+No duplicar lógica innecesaria.
+Adaptar validaciones para permitir que el recolector asignado también pueda ver/descargar la constancia de sus propios recojos.
+
+Parte 1 — PDF para recolector
+
+Endpoint sugerido:
+
+GET /api/recolector/historial/{solicitudId}/constancia
+
+Debe devolver:
+application/pdf
+
+Validaciones:
+
+1. Usuario autenticado.
+2. Usuario pertenece a empresa RECOLECTORA.
+3. La solicitud debe estar asignada a esa empresa recolectora.
+4. La solicitud debe estar COMPLETADA.
+5. estadoPago debe ser PAGADO.
+6. No permitir descargar constancias de otros recolectores.
+
+PDF:
+Puede ser el mismo diseño de constancia usado para restaurante.
+
+Debe incluir:
+
+* EcoTacna
+* código de constancia
+* fecha de emisión
+* restaurante/generador
+* RUC restaurante
+* recolector
+* RUC recolector
+* vehículo/unidad
+* fecha programada
+* dirección
+* litros confirmados
+* precio por litro
+* monto total
+* estado PAGADO
+* observaciones
+
+Frontend:
+En modal “Ver detalle”:
+
+* Si estado = COMPLETADO y estadoPago = PAGADO:
+  mostrar botón “Descargar constancia PDF”.
+* Si no:
+  mostrar “Constancia no disponible hasta completar el recojo.”
+
+Descarga:
+
+* Blob
+* nombre:
+  constancia-recolector-ecotacna-solicitud-{id}.pdf
+
+Parte 2 — Excel para recolector
+
+Botón:
+“Exportar Excel”
+
+Ubicación:
+Arriba de la tabla/listado del Historial de recojos.
+
+Al hacer clic:
+Abrir modal con:
+
+* Fecha desde
+* Fecha hasta
+* Exportar
+* Cancelar
+
+Endpoint sugerido:
+
+GET /api/recolector/historial/exportar?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+
+Debe devolver:
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+
+Validaciones:
+
+1. Usuario autenticado.
+2. Empresa recolectora autenticada.
+3. Exportar solo recojos asignados a esa empresa recolectora.
+4. desde <= hasta.
+5. Rango máximo sugerido: 1 año.
+
+Columnas Excel:
+
+* ID
+* Restaurante/generador
+* RUC restaurante
+* Fecha solicitud
+* Fecha programada
+* Dirección
+* Observaciones
+* Estado recojo
+* Estado pago
+* Volumen solicitado
+* Litros confirmados
+* Precio por litro
+* Monto total
+* Fecha confirmación
+* Unidad
+* Placa
+
+Diseño Excel:
+
+* Hoja: Historial Recolector
+* Título: Historial de Recojos EcoTacna
+* Subtítulo con rango de fechas
+* Datos de la empresa recolectora autenticada
+* Encabezados con estilo institucional
+* Columnas ajustadas
+* Formato moneda para monto
+* Formato numérico para litros
+
+No usar CSV.
+Debe ser .xlsx.
+
+Prueba manual:
+
+1. Entrar como recolector.
+2. Ir a Historial de recojos.
+3. Abrir detalle de un recojo COMPLETADO/PAGADO.
+4. Descargar constancia PDF.
+5. Confirmar que el PDF contiene restaurante, recolector, unidad, litros y monto.
+6. Abrir detalle de un recojo no completado si existe.
+7. Confirmar que no permite constancia.
+8. Presionar Exportar Excel.
+9. Elegir rango.
+10. Descargar Excel.
+11. Confirmar que contiene solo recojos de ese recolector.
+12. Confirmar que no contiene recojos de otros recolectores.
+
+Comandos:
+
+Frontend:
+npm run lint
+npx tsc --noEmit
+npm run build
+
+Backend:
+.\mvnw.cmd clean compile
+.\mvnw.cmd test
+
+Entrega:
+
+1. Endpoint PDF del recolector.
+2. Endpoint Excel del recolector.
+3. Validación de pertenencia al recolector autenticado.
+4. Archivos backend modificados.
+5. Archivos frontend modificados.
+6. Evidencia del PDF descargado.
+7. Evidencia del Excel descargado.
+8. Confirmación de que se reutilizó lógica existente cuando fue posible.
+9. Confirmación de que no se tocó ApiPeruDev, login, BCrypt, SecurityConfig ni pagos de suscripción.

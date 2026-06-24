@@ -1,0 +1,10 @@
+target/
+*.class
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+*.bak
+application-local.properties
+application-dev-local.properties

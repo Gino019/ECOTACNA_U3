@@ -1,0 +1,622 @@
+# Plan de implementación — Panel general del recolector EcoTacna
+
+## Objetivo
+
+Implementar el nuevo **Panel general del recolector** siguiendo la imagen visual de referencia entregada, usando únicamente datos reales de la base de datos.
+
+La interfaz debe mostrar una vista consolidada del recolector con:
+
+* estadísticas principales;
+* rendimiento de recojos;
+* resumen operativo;
+* suscripción y facturación;
+* recojos disponibles;
+* últimos recojos completados.
+
+No se deben usar mocks, datos inventados ni valores hardcodeados.
+
+---
+
+## Reglas previas obligatorias
+
+Antes de programar, leer y respetar los documentos del proyecto:
+
+`C:\Users\MILTONHFLORESCHINO\Desktop\ECOTACNA\ECOTACNA\docs`
+
+Especialmente:
+
+* `01-arquitectura`
+* `02-flujo-funcional`
+* `03-seguridad`
+* `04-despliegue`
+
+Restricciones generales:
+
+* No tocar ApiPeruDev.
+* No tocar login.
+* No tocar BCrypt.
+* No tocar SecurityConfig salvo que sea indispensable.
+* No borrar datos de BD.
+* No crear mocks.
+* No inventar datos.
+* No romper módulos existentes de recolector.
+* No romper panel empresa/restaurante.
+* No romper panel administrador.
+* No modificar precios vigentes:
+
+  * Generadora/restaurante: S/ 29.90.
+  * Recolectora: S/ 299.90.
+
+---
+
+# ETAPA 1 — Auditoría del dashboard actual del recolector
+
+## Objetivo
+
+Identificar qué datos ya existen en BD y qué endpoints actuales alimentan el resumen del recolector.
+
+## Archivos probables
+
+Frontend:
+
+* `EcoTacnaFrontend/src/pages/recolector/RecolectorDashboard.tsx`
+* `EcoTacnaFrontend/src/services/recolectorApi.ts`
+* componentes compartidos de cards, tablas o layout.
+
+Backend:
+
+* `CollectorPortalService.java`
+* `RecolectorController.java`
+* `PickupRequestController.java`
+* `TransportUnitRepository`
+* `PickupRequestRepository`
+* `SubscriptionRepository`
+* `PaymentRepository`
+* DTOs actuales del dashboard recolector.
+
+## Consultas SQL de diagnóstico
+
+Ajustar nombres de columnas si el esquema usa otros nombres:
+
+```sql
+SELECT 
+  c.id,
+  c.ruc,
+  c.business_name,
+  c.company_type,
+  c.subscription_status,
+  c.address,
+  u.email,
+  u.phone,
+  u.contact_person
+FROM companies c
+LEFT JOIN users u ON u.company_id = c.id
+WHERE c.company_type = 'RECOLECTORA'
+ORDER BY c.id DESC;
+```
+
+```sql
+SELECT 
+  pr.id,
+  pr.collector_company_id,
+  pr.company_id,
+  pr.estado,
+  pr.estado_pago,
+  pr.litros_estimados,
+  pr.litros_confirmados,
+  pr.precio_ofertado_por_litro,
+  pr.precio_por_litro,
+  pr.monto_total,
+  pr.fecha_programada,
+  pr.created_at
+FROM pickup_requests pr
+ORDER BY pr.id DESC;
+```
+
+```sql
+SELECT 
+  tu.id,
+  tu.company_id,
+  tu.plate,
+  tu.type,
+  tu.capacity_liters,
+  tu.brand,
+  tu.model,
+  tu.status,
+  tu.created_at
+FROM transport_units tu
+ORDER BY tu.company_id, tu.created_at DESC;
+```
+
+```sql
+SELECT *
+FROM subscriptions
+ORDER BY id DESC
+LIMIT 20;
+```
+
+```sql
+SELECT *
+FROM payments
+ORDER BY id DESC
+LIMIT 20;
+```
+
+## Entregable de esta etapa
+
+* Endpoint actual usado por el resumen recolector.
+* Campos reales disponibles.
+* Campos faltantes.
+* Confirmación de tabla/columna de placa del vehículo.
+* Confirmación de relación:
+  `PickupRequest -> collectorCompanyId -> Company recolectora -> TransportUnit`.
+* Confirmación de relación:
+  `Recolectora -> Subscription -> Payment`.
+* Lista de archivos a modificar.
+
+No implementar todavía si la auditoría detecta relaciones ambiguas.
+
+---
+
+# ETAPA 2 — Backend dinámico para el nuevo resumen del recolector
+
+## Objetivo
+
+Crear o ajustar un endpoint único que alimente toda la nueva interfaz del resumen recolector con datos reales.
+
+## Endpoint esperado
+
+Crear o ajustar:
+
+`GET /api/recolector/dashboard-general`
+
+O, si ya existe uno equivalente:
+
+`GET /api/recolector/dashboard`
+
+Debe devolver toda la data necesaria para la interfaz nueva.
+
+Debe usar el usuario autenticado.
+El recolector solo puede ver datos de su propia empresa recolectora.
+
+## DTO sugerido
+
+Crear un DTO limpio, por ejemplo:
+
+`CollectorGeneralDashboardResponse`
+
+Estructura sugerida:
+
+```json
+{
+  "company": {
+    "id": 22,
+    "businessName": "PETROFIL S.A.C.",
+    "ruc": "20601564425",
+    "companyType": "RECOLECTORA",
+    "status": "ACTIVA",
+    "email": "petrofil@gmail.com",
+    "phone": "957272747",
+    "contactPerson": "Rufino Alcantara",
+    "address": "RUFINO ALBARRACIN NRO. 0 ASC. PARA GRANDE"
+  },
+  "kpis": {
+    "completedPickups": 5,
+    "pendingPickups": 0,
+    "totalLitersCollected": 285.50,
+    "paymentsReceived": 727.75,
+    "activeUnits": 1,
+    "subscriptionStatus": "ACTIVA"
+  },
+  "vehicle": {
+    "id": 1,
+    "plate": "APT-896",
+    "type": "Furgón",
+    "capacityLiters": 300,
+    "brand": "Volvo",
+    "model": "FMY",
+    "status": "ACTIVO"
+  },
+  "subscription": {
+    "planName": "Plan Recolector Pro",
+    "monthlyAmount": 299.90,
+    "status": "ACTIVA",
+    "startDate": "2026-06-04",
+    "endDate": "2026-07-04",
+    "daysRemaining": 23,
+    "cancellationScheduled": true,
+    "message": "Tu cancelación fue programada. Mantendrás acceso hasta el 04/07/2026."
+  },
+  "performance": [
+    {
+      "pickupId": 1,
+      "liters": 50.50
+    }
+  ],
+  "recentCompletedPickups": [
+    {
+      "id": 1,
+      "companyName": "ALIMENTOS TACNA HEROICA S.R.L.",
+      "date": "2026-06-15",
+      "liters": 50.50,
+      "pricePerLiter": 2.50,
+      "status": "COMPLETADO",
+      "paymentStatus": "PAGADO",
+      "totalAmount": 126.25
+    }
+  ],
+  "availablePickups": []
+}
+```
+
+No usar exactamente estos datos como mock.
+La estructura es guía. Los valores deben salir de BD.
+
+## KPIs a calcular
+
+1. `completedPickups`
+
+   * cantidad de recojos del recolector autenticado con estado `COMPLETADO`.
+
+2. `pendingPickups`
+
+   * cantidad de recojos asignados/aceptados/programados que aún no están completados.
+
+3. `totalLitersCollected`
+
+   * suma de litros confirmados de recojos completados.
+   * Si `litros_confirmados` existe, usarlo.
+   * Si no existe y el modelo actual usa otro campo validado, usar ese.
+
+4. `paymentsReceived`
+
+   * suma de montos pagados por recojos completados/pagados.
+   * Preferir `monto_total` si existe.
+   * Si no existe, calcular:
+     `litros_confirmados * precio_por_litro`.
+
+5. `activeUnits`
+
+   * contar unidades activas de la recolectora.
+   * Debe ser máximo 1 según regla actual.
+
+6. `subscriptionStatus`
+
+   * estado real de la suscripción.
+
+## Gráfico de rendimiento
+
+`performance` debe tomar últimos recojos completados del recolector:
+
+* id de recojo;
+* litros confirmados.
+
+Orden sugerido:
+
+* últimos 5 completados;
+* ordenados por fecha descendente o ascendente para el gráfico.
+
+## Resumen operativo
+
+Debe devolver:
+
+* empresa;
+* tipo;
+* RUC;
+* estado;
+* correo;
+* persona de contacto;
+* teléfono;
+* dirección;
+* unidad registrada;
+* placa;
+* tipo de unidad;
+* marca/modelo;
+* capacidad.
+
+## Suscripción y facturación
+
+Debe devolver:
+
+* plan: `Plan Recolector Pro`;
+* monto: `S/ 299.90 / mes`;
+* estado real;
+* fecha inicio;
+* fecha vencimiento;
+* días restantes;
+* cancelación programada si existe;
+* mensaje de estado.
+
+No inventar fechas.
+
+Si no hay suscripción real, devolver estado controlado:
+
+* `Sin suscripción`;
+* monto aplicable: `299.90`;
+* `canRenew = true`.
+
+## Recojos disponibles
+
+Debe devolver solicitudes disponibles reales para recolectora.
+
+Si no hay:
+`availablePickups: []`
+
+El frontend mostrará:
+`No hay recojos disponibles actualmente.`
+
+## Últimos recojos completados
+
+Debe devolver:
+
+* ID;
+* empresa/restaurante;
+* fecha;
+* volumen;
+* precio por litro;
+* estado;
+* estado de pago;
+* monto total.
+
+## Seguridad
+
+El backend debe obtener la empresa recolectora desde el usuario autenticado, no desde un parámetro libre.
+
+No permitir consultar resumen de otra recolectora.
+
+## Validación backend
+
+Probar con token de recolector:
+
+```powershell
+$TOKEN="TOKEN_RECOLECTOR"
+curl.exe -i -H "Authorization: Bearer $TOKEN" `
+  http://localhost:8082/ecotacna/api/recolector/dashboard-general
+```
+
+Debe devolver HTTP 200 y JSON real.
+
+Compilar:
+
+```powershell
+cd EcoTacnaSpringBootJPA
+.\mvnw.cmd clean compile
+```
+
+---
+
+# ETAPA 3 — Frontend del nuevo panel general del recolector
+
+## Objetivo
+
+Implementar el rediseño visual siguiendo la imagen de referencia entregada, consumiendo solo el endpoint real del backend.
+
+## Archivos probables
+
+* `EcoTacnaFrontend/src/pages/recolector/RecolectorDashboard.tsx`
+* `EcoTacnaFrontend/src/services/recolectorApi.ts`
+* `EcoTacnaFrontend/src/types.ts`
+* componentes compartidos si existen.
+
+## Método API
+
+En `recolectorApi.ts`, agregar o ajustar:
+
+```ts
+getCollectorGeneralDashboard()
+```
+
+Debe consumir:
+
+`GET /api/recolector/dashboard-general`
+
+Usar el `apiClient` existente con JWT.
+
+No usar datos locales.
+
+No usar arrays mock.
+
+## Componentes sugeridos
+
+Crear componentes reutilizables y simples:
+
+* `CollectorStatCard`
+* `CollectorPerformanceChart`
+* `CollectorOperationalSummary`
+* `CollectorSubscriptionCard`
+* `CollectorAvailablePickupsCard`
+* `CollectorRecentPickupsTable`
+
+Si ya existen componentes equivalentes, reutilizarlos.
+
+No instalar librerías nuevas salvo que el proyecto ya use una librería de gráficos.
+Si no hay librería, hacer el gráfico de barras con HTML/CSS/Tailwind o SVG simple.
+
+## Layout esperado
+
+1. Encabezado:
+
+   * badge `Recolector autorizado`;
+   * badge `RUC ...`;
+   * título `Panel general del recolector`;
+   * subtítulo `Vista consolidada de recojos, pagos, unidad y suscripción.`;
+   * botón `Ver historial completo`.
+
+2. Fila de KPIs:
+
+   * Recojos completados.
+   * Recojos pendientes.
+   * Litros recolectados.
+   * Pagos recibidos.
+   * Unidad activa.
+   * Suscripción.
+
+3. Zona media:
+
+   * Gráfico `Rendimiento de recojos`.
+   * Card `Resumen operativo`.
+
+4. Zona de suscripción:
+
+   * Card `Suscripción y facturación`.
+   * Card lateral `Recojos disponibles`.
+
+5. Parte inferior:
+
+   * Tabla `Últimos recojos completados`.
+
+## Estados de frontend
+
+Debe manejar:
+
+* loading;
+* error real;
+* empty state;
+* datos nulos controlados.
+
+No convertir error backend en números cero falsos.
+
+Si falla endpoint:
+`No se pudo cargar el panel general del recolector.`
+
+## Formato de datos
+
+Teléfono:
+
+* si backend devuelve `957272747`, mostrar:
+  `+51 957 272 747`.
+
+Moneda:
+
+* `S/ 727.75`
+* `S/ 299.90 / mes`
+
+Litros:
+
+* `285.50 L`
+
+Estados:
+
+* badges legibles:
+
+  * `ACTIVA` -> `Activa`
+  * `COMPLETADO` -> `Completado`
+  * `PAGADO` -> `Pagado`
+
+## Validación frontend
+
+```powershell
+cd EcoTacnaFrontend
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+## Validación manual
+
+1. Login como recolector.
+2. Entrar a `Resumen`.
+3. Confirmar que el endpoint real responde en Network.
+4. Confirmar que los KPIs coinciden con JSON.
+5. Confirmar que gráfico de barras usa recojos reales.
+6. Confirmar que datos de unidad vienen de BD.
+7. Confirmar que suscripción viene de BD.
+8. Confirmar que últimos recojos coinciden con historial.
+9. Confirmar que si no hay recojos disponibles, se muestra empty state correcto.
+
+---
+
+# ETAPA 4 — Validación cruzada contra BD y limpieza de mocks
+
+## Objetivo
+
+Confirmar que todo el panel usa datos reales y no quedan residuos de mocks.
+
+## Buscar y eliminar
+
+Buscar en frontend y backend, excluyendo carpetas de build:
+
+```txt
+mock
+Mock
+fake
+demo
+hardcoded
+placeholder
+Pendiente de integración backend
+ALIMENTOS TACNA HEROICA S.R.L.
+PETROFIL S.A.C.
+APT-896
+727.75
+285.50
+```
+
+Atención:
+Algunos textos como `PETROFIL S.A.C.` o `APT-896` pueden existir en BD o en capturas/documentos.
+No deben existir hardcodeados en código fuente activo.
+
+## Validación SQL
+
+Comparar:
+
+1. Total recojos completados.
+2. Total litros.
+3. Total pagos.
+4. Unidad activa.
+5. Últimos recojos.
+
+Ejemplo:
+
+```sql
+SELECT COUNT(*)
+FROM pickup_requests
+WHERE collector_company_id = ID_RECOLECTORA
+  AND estado = 'COMPLETADO';
+```
+
+```sql
+SELECT SUM(litros_confirmados)
+FROM pickup_requests
+WHERE collector_company_id = ID_RECOLECTORA
+  AND estado = 'COMPLETADO';
+```
+
+```sql
+SELECT SUM(monto_total)
+FROM pickup_requests
+WHERE collector_company_id = ID_RECOLECTORA
+  AND estado = 'COMPLETADO'
+  AND estado_pago = 'PAGADO';
+```
+
+```sql
+SELECT *
+FROM transport_units
+WHERE company_id = ID_RECOLECTORA;
+```
+
+Ajustar nombres de columnas reales.
+
+## Entregable final
+
+* Captura del panel nuevo.
+* JSON real del endpoint.
+* SQL usado para validar.
+* Confirmación de cero mocks en código activo.
+* Backend compile OK.
+* Frontend lint/tsc/build OK.
+
+---
+
+# Orden recomendado
+
+1. Ejecutar ETAPA 1.
+2. Esperar diagnóstico.
+3. Ejecutar ETAPA 2.
+4. Probar endpoint con curl.
+5. Ejecutar ETAPA 3.
+6. Validar visualmente.
+7. Ejecutar ETAPA 4.
+8. Documentar cambios en `docs`.
+
+No hacer todo en un solo commit gigante si hay dudas con relaciones de BD.

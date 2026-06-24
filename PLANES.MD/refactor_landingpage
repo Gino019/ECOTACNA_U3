@@ -1,0 +1,624 @@
+
+# Plan de implementación — Ajuste del Landing Page principal EcoTacna
+
+## Objetivo general
+
+Actualizar el landing page principal de EcoTacna para que coincida con el sistema real actualmente implementado.
+
+No se requiere rediseño completo.
+Solo se debe:
+
+* eliminar datos de prueba o mock;
+* reemplazar estadísticas inventadas por datos reales desde BD;
+* quitar secciones que todavía no existen en el sistema;
+* corregir textos de roles, beneficios y flujo;
+* reemplazar la imagen principal del hero por la imagen real entregada;
+* agregar animaciones suaves al hacer scroll, sin romper rendimiento ni diseño.
+
+---
+
+## Antes de programar
+
+Leer y respetar:
+
+`C:\Users\MILTONHFLORESCHINO\Desktop\ECOTACNA\ECOTACNA\docs`
+
+Especialmente:
+
+* `01-arquitectura`
+* `02-flujo-funcional`
+* `03-seguridad`
+* `04-despliegue`
+
+No tocar:
+
+* login;
+* ApiPeruDev;
+* BCrypt;
+* SecurityConfig salvo que se agregue un endpoint público necesario;
+* pagos;
+* suscripciones internas;
+* panel administrador;
+* panel recolector;
+* panel empresa.
+
+---
+
+# ETAPA 1 — Auditoría y limpieza de datos falsos del landing
+
+## Problema actual
+
+El landing muestra datos que parecen mock o no corresponden a la BD real:
+
+* `18,420 L recolectados`;
+* `142 empresas activas`;
+* `12 recolectores`;
+* `8 distritos`;
+* `S/ 51,576 pagos procesados`;
+* `312 certificados emitidos`;
+* cobertura territorial por distritos;
+* mapa operativo territorial;
+* beneficios o pasos que ya no aplican;
+* textos como “trazabilidad QR”, “certificados”, “liquidaciones”, “cobertura por distrito” si no están implementados realmente.
+
+## Tareas
+
+Buscar en el frontend, excluyendo `node_modules`, `dist`, `.git`:
+
+```txt
+18420
+18,420
+142 empresas
+12 recolectores
+8 distritos
+51576
+51,576
+312
+certificados emitidos
+Cobertura territorial
+Distritos atendidos
+Mapa de cobertura
+Google Maps
+GPS
+QR
+Liquidaciones
+Certificados ambientales
+Cobertura por distrito
+Trazabilidad emitida
+```
+
+Ubicar archivos probables:
+
+* `LandingPage.tsx`
+* `HomePage.tsx`
+* `PublicLanding.tsx`
+* `src/pages`
+* `src/components/landing`
+* `src/assets`
+* `src/routes`
+
+Eliminar cualquier constante, array o dato hardcodeado que alimente estadísticas falsas.
+
+No reemplazar con otros datos inventados.
+
+---
+
+# ETAPA 2 — Estadísticas reales del landing desde BD
+
+## Objetivo
+
+Las estadísticas públicas del landing deben salir de la base de datos o, si no hay datos reales, mostrarse en cero o no mostrarse.
+
+## Endpoint sugerido
+
+Crear endpoint público de solo lectura:
+
+`GET /api/public/landing-stats`
+
+Debe devolver datos agregados, sin información sensible.
+
+Respuesta sugerida:
+
+```json
+{
+  "success": true,
+  "message": "Estadísticas públicas EcoTacna",
+  "data": {
+    "litrosRecolectados": 0,
+    "empresasActivas": 0,
+    "recolectoresActivos": 0,
+    "pagosProcesados": 0
+  }
+}
+```
+
+## Métricas permitidas
+
+Solo mostrar estas métricas si se pueden calcular desde BD:
+
+1. `litrosRecolectados`
+
+   * suma de litros confirmados de recojos completados.
+
+2. `empresasActivas`
+
+   * empresas GENERADORAS activas o verificadas.
+
+3. `recolectoresActivos`
+
+   * empresas RECOLECTORAS activas.
+
+4. `pagosProcesados`
+
+   * suma real de pagos/recojos pagados si existe el dato.
+
+## Métricas que se deben eliminar por ahora
+
+Eliminar del landing:
+
+* distritos atendidos;
+* mapa territorial;
+* certificados emitidos;
+* cobertura por distrito;
+* GPS o seguimiento real;
+* QR/trazabilidad si aún no está implementado de forma real;
+* liquidaciones si el flujo ya se retiró.
+
+## Backend
+
+Revisar o crear:
+
+* `PublicController.java`
+* `LandingController.java`
+* `PublicStatsController.java`
+* servicio `LandingStatsService`
+* repositorios existentes:
+
+  * `CompanyRepository`
+  * `PickupRequestRepository`
+  * `PaymentRepository`
+
+El endpoint debe ser público, pero solo devuelve agregados.
+No debe exponer empresas, correos, teléfonos, RUC ni datos personales.
+
+Si se modifica seguridad, hacerlo mínimo y documentado.
+
+---
+
+# ETAPA 3 — Ajustar textos del landing al flujo real actual
+
+## Objetivo
+
+Modificar textos para que el landing explique exactamente lo que EcoTacna hace hoy.
+
+## Hero principal
+
+Mantener idea central:
+
+`Gestión digital del aceite usado en Tacna`
+
+Texto sugerido:
+
+`Conectamos restaurantes, pollerías y locales de comida con recolectores autorizados. Registra tu empresa, solicita recojos, acuerda el precio por litro y consulta el historial de tus operaciones desde una sola plataforma.`
+
+Badges inferiores sugeridos:
+
+* `Validación interna`
+* `Recojos programados`
+* `Pago por litro acordado`
+
+Evitar por ahora:
+
+* `Trazabilidad QR`;
+* `certificados`;
+* `mapa GPS`;
+* `cobertura por distrito`.
+
+---
+
+## Sección “Cómo funciona EcoTacna”
+
+Actualizar pasos a los flujos reales actuales:
+
+1. `Empresa se registra`
+
+   * Consulta RUC con ApiPeruDev y completa datos de contacto.
+
+2. `Validación interna`
+
+   * El administrador aprueba o rechaza el acceso.
+
+3. `Solicita recojo`
+
+   * La empresa indica litros estimados, precio por litro, dirección y fecha disponible.
+
+4. `Recolector acepta`
+
+   * La recolectora autorizada acepta la solicitud y usa su unidad registrada.
+
+5. `Recojo y confirmación`
+
+   * Se confirma el recojo con litros reales y monto final.
+
+6. `Historial operativo`
+
+   * Empresa y recolector consultan solicitudes, pagos y registros completados.
+
+Eliminar o corregir:
+
+* `Trazabilidad emitida`;
+* `Pago y certificado`;
+* `QR`;
+* `certificado ambiental descargable`.
+
+---
+
+## Sección “Quiénes participan”
+
+Actualizar roles:
+
+### Administrador
+
+Texto:
+`Valida empresas generadoras y recolectoras, supervisa suscripciones, revisa indicadores y mantiene el control institucional de la plataforma.`
+
+Bullets reales:
+
+* aprobar empresas y recolectoras;
+* revisar panel financiero;
+* consultar empresas registradas;
+* consultar recolectores;
+* revisar unidades de transporte;
+* exportar reportes disponibles.
+
+Eliminar:
+
+* gestión de usuarios si ese módulo ya fue retirado;
+* solicitudes admin si ese módulo fue retirado.
+
+### Empresa / Generadora
+
+Texto:
+`Restaurantes, pollerías y locales de comida que generan aceite usado y solicitan recojos de manera digital.`
+
+Bullets reales:
+
+* solicitar recojo;
+* indicar litros estimados;
+* proponer precio por litro;
+* ver recolector y placa asignada;
+* consultar historial de solicitudes;
+* administrar datos de contacto y suscripción.
+
+Eliminar:
+
+* certificados ambientales;
+* liquidaciones por litro si ya no existe como módulo separado;
+* trazabilidad QR si no está implementada.
+
+### Recolector
+
+Texto:
+`Empresas autorizadas que aceptan recojos, registran su unidad vehicular y confirman litros reales recolectados.`
+
+Bullets reales:
+
+* registrar una unidad vehicular;
+* aceptar recojos disponibles;
+* ver datos de contacto de la empresa;
+* confirmar litros reales;
+* consultar historial de recojos;
+* administrar suscripción.
+
+Eliminar:
+
+* cobertura por distrito;
+* generar liquidaciones;
+* QR ilimitados.
+
+---
+
+## Sección “Beneficios”
+
+Mantener beneficios reales:
+
+* `Formalidad`
+
+  * Registro y validación interna de empresas.
+
+* `Información centralizada`
+
+  * Solicitudes, recojos, pagos y suscripciones en un solo lugar.
+
+* `Pago por litro`
+
+  * La empresa propone precio y el sistema calcula monto estimado/final.
+
+* `Control operativo`
+
+  * Cada recolector usa una unidad registrada con placa visible.
+
+* `Historial`
+
+  * Empresa y recolector consultan operaciones completadas.
+
+* `Suscripciones claras`
+
+  * Plan generador y plan recolector con montos definidos.
+
+Eliminar:
+
+* certificación si no está lista;
+* impacto ambiental con cifras falsas;
+* QR si no existe.
+
+---
+
+# ETAPA 4 — Eliminar sección de cobertura/mapa territorial
+
+## Objetivo
+
+Eliminar completamente del landing la sección:
+
+* `Operamos en toda la región Tacna`;
+* mapa de cobertura;
+* distritos atendidos;
+* Tacna Cercado, Gregorio Albarracín, Pocollay, etc.;
+* niveles Alta/Media/Baja.
+
+Motivo:
+Aún no se usa Google Maps ni cobertura territorial real.
+
+## Tareas
+
+Eliminar:
+
+* componente de mapa;
+* datos hardcodeados de distritos;
+* cards de cobertura;
+* navegación del header hacia `Cobertura`;
+* anchor `#cobertura` si queda huérfano.
+
+Actualizar navbar:
+
+Antes:
+`Inicio | Impacto | Cómo funciona | Cobertura | Roles | Beneficios | Contacto`
+
+Después sugerido:
+`Inicio | Impacto | Cómo funciona | Roles | Beneficios | Planes | Contacto`
+
+---
+
+# ETAPA 5 — Reemplazar imagen principal del hero
+
+## Objetivo
+
+Reemplazar la imagen actual tipo maqueta/isométrica por la imagen real entregada de Tacna con camiones/recojo de aceite.
+
+## Tareas
+
+1. Copiar la imagen entregada al proyecto, por ejemplo:
+
+`EcoTacnaFrontend/src/assets/landing/tacna-aceite-hero.png`
+
+o si el proyecto usa `public`:
+
+`EcoTacnaFrontend/public/images/landing/tacna-aceite-hero.png`
+
+2. Reemplazar el uso actual de la imagen del hero.
+
+3. Mantener:
+
+   * bordes redondeados;
+   * sombra suave;
+   * cards flotantes si se ven bien;
+   * altura responsiva;
+   * `object-cover`.
+
+4. Agregar `alt` descriptivo:
+
+`Vista referencial de Tacna con recolección de aceite usado`
+
+5. Si la imagen es muy pesada:
+
+   * optimizar tamaño;
+   * usar `.webp` si el proyecto ya lo maneja;
+   * no romper calidad visual.
+
+---
+
+# ETAPA 6 — Animaciones suaves al hacer scroll
+
+## Objetivo
+
+Agregar movimiento visual suave mientras el usuario baja por el landing, sin sobrecargar la página.
+
+## Reglas
+
+* Usar animaciones sutiles.
+* No animar todo de forma exagerada.
+* Respetar `prefers-reduced-motion`.
+* No instalar dependencias nuevas si no es necesario.
+
+## Opción recomendada
+
+Si el proyecto ya usa `framer-motion`, usarlo.
+
+Si no lo usa, no instalarlo todavía.
+Implementar con:
+
+* CSS transitions;
+* `IntersectionObserver`;
+* clases tipo:
+
+  * `opacity-0 translate-y-6`;
+  * `opacity-100 translate-y-0`;
+  * `transition-all duration-700`.
+
+## Secciones a animar
+
+* Hero: entrada suave de texto e imagen.
+* Stats: aparición escalonada.
+* Cards de problema/impacto: fade-up.
+* Pasos “Cómo funciona”: stagger.
+* Roles: fade-up por card.
+* Beneficios: fade-up.
+* Planes: fade-up.
+* CTA final: fade-up.
+
+## Animación de imagen hero
+
+Aplicar una animación leve:
+
+* `float` vertical suave;
+* o `scale` muy pequeño al cargar;
+* o parallax muy leve según scroll.
+
+Evitar animaciones pesadas.
+
+Ejemplo CSS:
+
+```css
+@keyframes eco-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+```
+
+Clase:
+`animate-eco-float`
+
+Solo en desktop si se ve bien.
+
+---
+
+# ETAPA 7 — Planes y precios
+
+Confirmar que se mantengan los precios actuales:
+
+### Restaurantes y locales
+
+`S/ 29.90 / mes`
+
+Texto:
+`Incluye 7 días de prueba gratis al registrarte.`
+
+Botón:
+`Comenzar 7 días de prueba`
+
+### Recolectores
+
+`S/ 299.90 / mes`
+
+Botón:
+`Registrar empresa recolectora`
+
+No volver a usar:
+
+* `Gratis` como precio final;
+* `S/ 20.00`;
+* `S/ 45.00`.
+
+---
+
+# ETAPA 8 — Validación final
+
+## Buscar residuos
+
+Después de modificar, buscar:
+
+```txt
+18,420
+142
+312
+51,576
+8 distritos
+Cobertura territorial
+Mapa de cobertura
+GPS
+QR
+Certificados emitidos
+Liquidaciones
+S/ 20
+S/ 45
+Gratis
+Pendiente de integración backend
+mock
+fake
+demo
+placeholder
+```
+
+Si quedan en código activo, eliminarlos o justificar.
+
+## Validación técnica
+
+Frontend:
+
+```powershell
+cd EcoTacnaFrontend
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+Backend, si se creó endpoint público:
+
+```powershell
+cd EcoTacnaSpringBootJPA
+.\mvnw.cmd clean compile
+```
+
+## Validación manual
+
+1. Abrir landing page.
+2. Confirmar que la imagen del hero fue reemplazada.
+3. Confirmar que las estadísticas salen de BD.
+4. Confirmar que ya no aparece sección de mapa/cobertura territorial.
+5. Confirmar que no aparecen datos inventados.
+6. Confirmar que textos coinciden con flujo actual.
+7. Confirmar que los precios son:
+
+   * S/ 29.90 generadora;
+   * S/ 299.90 recolectora.
+8. Confirmar animaciones suaves al hacer scroll.
+9. Confirmar versión responsive móvil/tablet/desktop.
+10. Confirmar que botones:
+
+* `Registrar empresa`;
+* `Ingresar`;
+* `Comenzar 7 días de prueba`;
+  funcionan correctamente.
+
+---
+
+# Restricciones finales
+
+* No rediseñar todo el landing.
+* No crear datos falsos.
+* No inventar estadísticas.
+* No mostrar mapa/cobertura mientras no exista Google Maps real.
+* No mencionar QR si no está implementado.
+* No mencionar certificados si no están implementados.
+* No mencionar liquidaciones si el módulo fue retirado.
+* No tocar autenticación.
+* No tocar paneles internos.
+* No romper registro.
+* No romper login.
+* No tocar ApiPeruDev.
+* No tocar pagos ni suscripciones internas.
+
+---
+
+# Entregable
+
+* Archivos modificados.
+* Secciones eliminadas.
+* Textos actualizados.
+* Endpoint público creado o reutilizado para estadísticas.
+* JSON real del endpoint.
+* Imagen reemplazada en hero.
+* Confirmación de animaciones implementadas.
+* Captura del landing actualizado.
+* Frontend lint/tsc/build OK.
+* Backend compile OK si aplica.

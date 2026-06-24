@@ -1,0 +1,294 @@
+ETAPA 3 — Confirmar recojo y pago usando el precio ofertado original
+
+Implementa solo esta etapa.
+
+No audites todo.
+No toques PDF.
+No toques Excel.
+No toques limpieza del proyecto.
+No toques captcha.
+No toques login.
+No toques ApiPeruDev.
+No toques BCrypt.
+No toques SecurityConfig.
+No toques pagos de suscripción.
+No toques registro de empresas.
+No toques aprobación administrativa.
+No toques panel admin.
+No toques módulo de unidades.
+
+Contexto:
+La Etapa 1 ya agregó el campo:
+
+precioOfertadoPorLitro
+
+en la solicitud de recojo.
+
+La Etapa 2 ya muestra visualmente:
+
+* precioOfertadoPorLitro
+* montoEstimado
+
+en el flujo del restaurante y del recolector.
+
+Ahora necesitamos corregir la confirmación final del recojo/pago.
+
+Antes, el restaurante podía ingresar el precio por litro al confirmar el pago. Eso ya no es correcto.
+
+Nueva regla de negocio:
+El precio por litro nace cuando el restaurante crea la solicitud.
+El recolector acepta sabiendo ese precio.
+Al final, el restaurante solo confirma cuántos litros reales se recolectaron.
+El sistema calcula el monto final usando el precio ofertado originalmente.
+
+Fórmula:
+
+montoFinal = litrosConfirmados * precioOfertadoPorLitro
+
+Objetivo:
+Modificar la confirmación de recojo/pago para que:
+
+1. Ya no pida precio por litro al final.
+2. Muestre el precio ofertado original como dato de solo lectura.
+3. Pida solo:
+
+   * litros confirmados;
+   * observación opcional.
+4. Calcule automáticamente el monto final.
+5. Guarde:
+
+   * litrosConfirmados;
+   * precioPorLitro aplicado, tomado desde precioOfertadoPorLitro;
+   * montoTotal;
+   * estadoPago = PAGADO;
+   * estado recojo = COMPLETADO;
+   * fechaConfirmacionPago;
+   * observacionPago.
+6. Libere al recolector para aceptar otro pedido.
+
+Backend a revisar solo:
+
+* PickupRequest.java
+* PickupRequestRequest.java si existía DTO de confirmación
+* DTO request de confirmar pago operativo
+* DTO response de confirmación
+* PickupRequestService.java
+* PickupRequestController.java
+* PickupRequestRepository.java si hace falta
+* ModelMapper.java o mapper equivalente si el response necesita datos nuevos
+
+Frontend a revisar solo:
+
+* EmpresaSeguimiento.tsx
+* empresaApi.ts
+* types.ts
+
+No revisar módulos ajenos.
+
+Backend — endpoint esperado:
+Usar el endpoint ya existente o corregirlo:
+
+POST /api/empresa/solicitudes/{solicitudId}/confirmar-pago
+
+Request nuevo esperado:
+
+{
+"litrosConfirmados": 32,
+"observacionPago": "Recojo completado correctamente"
+}
+
+Ya no enviar precioPorLitro desde frontend.
+
+Backend — validaciones obligatorias:
+
+1. Usuario autenticado.
+2. Usuario pertenece a la empresa generadora dueña de la solicitud.
+3. Solicitud existe.
+4. Solicitud pertenece a la empresa autenticada.
+5. Solicitud tiene recolector asignado.
+6. Solicitud está en estado activo válido:
+
+   * PROGRAMADO
+   * ACEPTADO
+   * EN_CURSO
+   * EN_RUTA
+     o los equivalentes reales del proyecto.
+7. Solicitud no está ya COMPLETADA.
+8. Solicitud no tiene estadoPago PAGADO.
+9. litrosConfirmados > 0.
+10. precioOfertadoPorLitro debe existir y ser mayor a 0.
+
+Si precioOfertadoPorLitro es null:
+No inventar precio.
+No usar 2.50 por defecto.
+Devolver error controlado:
+
+“No se puede confirmar el pago porque la solicitud no tiene precio ofertado registrado.”
+
+Esto protege solicitudes antiguas creadas antes de la Etapa 1.
+
+Backend — cálculo:
+
+BigDecimal precioAplicado = pickupRequest.getPrecioOfertadoPorLitro();
+
+BigDecimal montoTotal = litrosConfirmados.multiply(precioAplicado);
+
+Guardar:
+
+* litrosConfirmados
+* precioPorLitro = precioAplicado
+* montoTotal
+* estadoPago = PAGADO
+* estado = COMPLETADO
+* fechaConfirmacionPago = now
+* observacionPago
+
+Si el modelo ya tenía precioPorLitro para pagos anteriores, mantenerlo como “precio aplicado final”, pero ahora debe copiarse desde precioOfertadoPorLitro.
+
+No aceptar precioPorLitro desde el request.
+
+Frontend — EmpresaSeguimiento:
+
+En el modal “Confirmar recojo y pago”:
+
+Eliminar campo editable:
+
+* precio por litro
+
+Mostrar como dato de solo lectura:
+
+* Precio ofertado: S/ 2.80 / L
+
+Campos editables:
+
+* Litros confirmados
+* Observación opcional
+
+Mostrar monto final calculado en vivo:
+
+Litros confirmados x Precio ofertado = Monto final
+
+Ejemplo:
+40 L x S/ 2.80 = S/ 112.00
+
+Si precioOfertadoPorLitro es null:
+
+* Deshabilitar botón de confirmar pago.
+* Mostrar:
+  “Esta solicitud no tiene precio ofertado registrado. No se puede confirmar el pago desde este flujo.”
+
+Frontend — payload:
+Enviar solo:
+
+{
+"litrosConfirmados": 40,
+"observacionPago": "Pago confirmado"
+}
+
+No enviar precioPorLitro.
+No enviar montoTotal.
+
+El backend debe calcular el monto.
+
+Después de confirmar:
+
+* Mostrar toast de éxito.
+* Actualizar visualmente estado a COMPLETADO/PAGADO.
+* Mostrar:
+
+  * litros confirmados;
+  * precio aplicado;
+  * monto total;
+  * fecha de confirmación.
+* Ocultar botón de confirmación.
+* El recolector debe quedar liberado.
+
+Compatibilidad:
+Solicitudes nuevas creadas desde Etapa 1 sí deben funcionar.
+Solicitudes antiguas sin precio deben mostrar error controlado o estado no confirmable.
+No migrar datos antiguos todavía.
+
+No implementar:
+
+* PDF
+* Excel
+* constancias
+* exportación
+* limpieza de archivos
+* auditoría captcha
+
+Prueba manual obligatoria:
+
+1. Crear nueva solicitud desde restaurante:
+
+   * volumen aproximado: 40 L
+   * precio ofertado: S/ 2.80
+   * monto estimado: S/ 112.00
+
+2. Entrar como recolector.
+
+3. Aceptar la solicitud.
+
+4. Volver al restaurante.
+
+5. Entrar a Seguimiento.
+
+6. Abrir modal “Confirmar recojo y pago”.
+
+7. Confirmar que:
+
+   * NO aparece campo editable precio por litro.
+   * Sí aparece precio ofertado como solo lectura: S/ 2.80 / L.
+   * Sí aparece campo litros confirmados.
+   * Sí calcula monto final en vivo.
+
+8. Ingresar:
+
+   * litrosConfirmados: 40
+   * observación opcional.
+
+9. Confirmar pago.
+
+10. Verificar response backend:
+
+* estado = COMPLETADO
+* estadoPago = PAGADO
+* litrosConfirmados = 40
+* precioPorLitro = 2.80
+* montoTotal = 112.00
+
+11. Verificar que el recolector ya no tenga ese recojo como activo.
+
+12. Verificar que el recolector pueda aceptar otra solicitud.
+
+13. Probar una solicitud antigua sin precio, si existe:
+
+* debe bloquear confirmación con mensaje controlado.
+* no debe mostrar NaN.
+* no debe inventar precio.
+
+Pruebas técnicas:
+
+Backend:
+.\mvnw.cmd clean compile
+.\mvnw.cmd test
+
+Frontend:
+npm run lint
+npx tsc --noEmit
+npm run build
+
+Entrega final de Etapa 3:
+
+1. Archivos backend modificados.
+2. Archivos frontend modificados.
+3. Confirmación de que el request ya no recibe precioPorLitro.
+4. Request real enviado desde frontend.
+5. Response real recibido del backend.
+6. Evidencia visual del modal sin campo editable de precio.
+7. Evidencia visual del precio ofertado como solo lectura.
+8. Evidencia visual del monto final calculado.
+9. Evidencia de solicitud COMPLETADA/PAGADA.
+10. Evidencia de que el recolector queda liberado.
+11. Confirmación de manejo correcto para solicitudes antiguas sin precio.
+12. Confirmación de que no tocaste PDF, Excel, captcha, login, ApiPeruDev, BCrypt, SecurityConfig, pagos de suscripción ni limpieza general.

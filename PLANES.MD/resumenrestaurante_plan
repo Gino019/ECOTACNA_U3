@@ -1,0 +1,657 @@
+# Plan de ejecución — Rediseño del Panel Resumen Empresa / Restaurante EcoTacna
+
+## Objetivo
+
+Implementar el nuevo **Panel Resumen del perfil EMPRESA / RESTAURANTE / GENERADORA** siguiendo la imagen de referencia entregada.
+
+La interfaz debe mostrar únicamente datos reales de la base de datos:
+
+* datos de la empresa autenticada;
+* estadísticas de solicitudes y recojos;
+* litros reciclados/recolectados;
+* gasto total pagado al recolector;
+* evolución de reciclaje;
+* resumen operativo;
+* solicitudes recientes;
+* estado de suscripción;
+* gráficos dinámicos basados en campos reales.
+
+No usar mocks, datos fijos, placeholders ni valores inventados.
+
+---
+
+## Antes de programar
+
+Leer obligatoriamente:
+
+`C:\Users\MILTONHFLORESCHINO\Desktop\ECOTACNA\ECOTACNA\docs`
+
+Especialmente:
+
+* `01-arquitectura`
+* `02-flujo-funcional`
+* `03-seguridad`
+* `04-despliegue`
+
+Mantener el mismo estilo visual EcoTacna ya usado en:
+
+* Panel Administrador.
+* Panel Recolector.
+* Mi empresa.
+* Mis solicitudes.
+* Seguimiento.
+
+---
+
+# ETAPA 1 — Auditoría de datos reales
+
+## Objetivo
+
+Antes de tocar frontend, confirmar qué datos existen realmente en BD para construir el resumen.
+
+## Revisar tablas principales
+
+Ajustar nombres reales de columnas si difieren:
+
+```sql
+SELECT 
+  c.id,
+  c.ruc,
+  c.business_name,
+  c.company_type,
+  c.subscription_status,
+  c.address,
+  c.created_at,
+  u.email,
+  u.phone,
+  u.contact_person
+FROM companies c
+LEFT JOIN users u ON u.company_id = c.id
+WHERE c.company_type = 'GENERADORA'
+ORDER BY c.id DESC;
+```
+
+```sql
+SELECT 
+  pr.id,
+  pr.company_id,
+  pr.collector_company_id,
+  pr.estado,
+  pr.estado_pago,
+  pr.litros_estimados,
+  pr.litros_confirmados,
+  pr.precio_ofertado_por_litro,
+  pr.precio_por_litro,
+  pr.monto_total,
+  pr.direccion_recojo,
+  pr.fecha_programada,
+  pr.created_at
+FROM pickup_requests pr
+ORDER BY pr.id DESC;
+```
+
+```sql
+SELECT 
+  c.id,
+  c.business_name,
+  c.ruc,
+  u.email,
+  u.phone
+FROM companies c
+LEFT JOIN users u ON u.company_id = c.id
+WHERE c.company_type = 'RECOLECTORA'
+ORDER BY c.id DESC;
+```
+
+```sql
+SELECT 
+  tu.id,
+  tu.company_id,
+  tu.plate,
+  tu.type,
+  tu.capacity_liters,
+  tu.brand,
+  tu.model,
+  tu.status
+FROM transport_units tu
+ORDER BY tu.company_id;
+```
+
+```sql
+SELECT *
+FROM subscriptions
+ORDER BY id DESC
+LIMIT 20;
+```
+
+```sql
+SELECT *
+FROM payments
+ORDER BY id DESC
+LIMIT 20;
+```
+
+## Confirmar en auditoría
+
+1. Cómo se relaciona una solicitud con la empresa generadora.
+2. Cómo se relaciona una solicitud con la recolectora asignada.
+3. Cómo se obtiene la placa del vehículo.
+4. Qué campo representa litros reales:
+
+   * preferir `litros_confirmados`;
+   * si no existe, usar campo equivalente real;
+   * no usar `litros_estimados` para recojos completados si ya existe confirmado.
+5. Qué campo representa dinero pagado:
+
+   * preferir `monto_total`;
+   * si no existe, calcular `litros_confirmados * precio_por_litro`.
+6. Confirmar si existe campo de tipo de residuo.
+
+   * Si no existe, NO crear gráfico falso de “Aceite usado / grasa / orgánicos”.
+   * En ese caso, cambiar ese gráfico por “Distribución por estado de solicitudes” o “Volumen por estado”.
+
+---
+
+# ETAPA 2 — Backend dinámico del resumen empresa
+
+## Objetivo
+
+Crear o ajustar un endpoint único para alimentar el panel resumen de la empresa autenticada.
+
+## Endpoint sugerido
+
+Crear o ajustar:
+
+`GET /api/empresa/dashboard-general`
+
+Si ya existe `/api/empresa/dashboard`, puede reutilizarse, pero debe quedar limpio y completo.
+
+El endpoint debe usar el usuario autenticado.
+No recibir `companyId` libre desde frontend.
+
+## DTO sugerido
+
+Crear un DTO limpio:
+
+`CompanyGeneralDashboardResponse`
+
+Estructura guía:
+
+```json
+{
+  "company": {
+    "id": 10,
+    "businessName": "ALIMENTOS TACNA HEROICA S.R.L.",
+    "ruc": "20519584892",
+    "companyType": "GENERADORA",
+    "status": "ACTIVA",
+    "address": "Dirección 20519584892",
+    "email": "alimentostacna@gmail.com",
+    "phone": "931658522",
+    "contactPerson": "Miguel Sanchez",
+    "createdAt": "2026-06-03"
+  },
+  "kpis": {
+    "totalLitersRecycled": 285.50,
+    "totalRequests": 5,
+    "completedRequests": 5,
+    "pendingRequests": 0,
+    "totalPaidToCollectors": 727.75,
+    "activeRequest": false
+  },
+  "monthlyEvolution": [
+    {
+      "month": "Ene",
+      "liters": 25.00
+    }
+  ],
+  "operationalSummary": {
+    "type": "GENERADORA",
+    "ruc": "20519584892",
+    "address": "Dirección 20519584892",
+    "email": "alimentostacna@gmail.com",
+    "phone": "931658522",
+    "status": "ACTIVA",
+    "memberSince": "2026-06-03"
+  },
+  "requestDistribution": [
+    {
+      "label": "Completadas",
+      "value": 5,
+      "liters": 285.50
+    }
+  ],
+  "recentRequests": [
+    {
+      "id": 12,
+      "requestDate": "2026-06-11 02:52",
+      "scheduledDate": "2026-06-11 12:00",
+      "liters": 50.00,
+      "pricePerLiter": 2.70,
+      "totalAmount": 135.00,
+      "status": "COMPLETADO",
+      "paymentStatus": "PAGADO",
+      "collectorName": "PETROFIL S.A.C.",
+      "collectorRuc": "20601564425",
+      "vehiclePlate": "APT-896",
+      "pickupAddress": "Av los educadores 124"
+    }
+  ],
+  "subscription": {
+    "planName": "Plan Generador Básico",
+    "monthlyAmount": 29.90,
+    "status": "PRUEBA_GRATUITA",
+    "startDate": "2026-06-03",
+    "trialEndDate": "2026-06-10",
+    "endDate": "2026-06-10",
+    "daysRemaining": 0,
+    "cancellationScheduled": false,
+    "message": "Tu prueba gratuita vence el 10/06/2026. Luego se aplicará el plan de S/ 29.90 mensual."
+  }
+}
+```
+
+La estructura es guía.
+Los valores deben salir de BD.
+
+## Cálculos backend
+
+### KPIs
+
+1. `totalLitersRecycled`
+
+   * suma de litros confirmados de solicitudes de la empresa en estado `COMPLETADO`.
+
+2. `totalRequests`
+
+   * total de solicitudes creadas por la empresa.
+
+3. `completedRequests`
+
+   * solicitudes en estado `COMPLETADO`.
+
+4. `pendingRequests`
+
+   * solicitudes pendientes/programadas/en curso.
+
+5. `totalPaidToCollectors`
+
+   * suma de `monto_total` de solicitudes completadas/pagadas.
+   * Si `monto_total` está nulo, calcular con litros y precio real.
+
+6. `activeRequest`
+
+   * true si existe solicitud en estado pendiente/programado/en curso.
+
+### Evolución mensual
+
+Agrupar por mes:
+
+* últimos 6 meses;
+* sumar litros confirmados;
+* si no hay datos en un mes, devolver 0;
+* no inventar meses con valores positivos.
+
+### Distribución / gráfico circular
+
+Solo usar categorías reales.
+
+Orden recomendado:
+
+1. Si existe `tipo_residuo` o equivalente:
+
+   * agrupar por tipo de residuo.
+
+2. Si no existe:
+
+   * agrupar por estado de solicitud:
+
+     * completadas;
+     * pendientes;
+     * programadas;
+     * canceladas.
+
+No crear categorías falsas como:
+
+* “Grasa animal”;
+* “Restos orgánicos”;
+* “Otros”;
+  si no existen en BD.
+
+### Solicitudes recientes
+
+Devolver últimas 5 solicitudes de la empresa con:
+
+* ID;
+* fecha solicitud;
+* fecha programada;
+* litros;
+* precio por litro;
+* monto;
+* estado;
+* pago;
+* recolectora;
+* placa;
+* dirección.
+
+La placa debe salir desde:
+
+`pickup_request -> collector_company_id -> transport_units`
+
+Si no hay recolectora:
+`Sin recolector asignado`.
+
+Si hay recolectora pero no vehículo:
+`Vehículo no registrado`.
+
+### Suscripción
+
+Usar la lógica ya implementada en “Mi empresa” para no duplicar reglas.
+
+Debe mostrar:
+
+* plan generador básico;
+* S/ 29.90 mensual;
+* 7 días de prueba si aplica;
+* fecha de inicio;
+* fecha fin de prueba;
+* fecha vencimiento;
+* días restantes;
+* estado;
+* cancelación programada.
+
+---
+
+# ETAPA 3 — Frontend del nuevo resumen empresa
+
+## Objetivo
+
+Rediseñar `Resumen` del perfil empresa/restaurante siguiendo la imagen de referencia.
+
+## Archivos probables
+
+* `EcoTacnaFrontend/src/pages/empresa/EmpresaDashboard.tsx`
+* `EcoTacnaFrontend/src/services/empresaApi.ts`
+* `EcoTacnaFrontend/src/types.ts`
+* componentes compartidos de cards/tablas/gráficos.
+
+## Método API
+
+Agregar en `empresaApi.ts`:
+
+```ts
+getCompanyGeneralDashboard()
+```
+
+Debe consumir:
+
+`GET /api/empresa/dashboard-general`
+
+Usar `apiClient` con JWT.
+
+No usar localStorage como fuente de métricas.
+No usar mocks.
+No usar datos hardcodeados.
+
+## Layout visual esperado
+
+### Header
+
+Mostrar:
+
+* badge `Empresa verificada`;
+* badge `RUC ...`;
+* razón social;
+* dirección;
+* botón `Solicitar recojo`.
+
+### KPIs superiores
+
+Cards:
+
+1. `Litros reciclados`
+
+   * valor: `totalLitersRecycled`.
+
+2. `Solicitudes`
+
+   * valor: `totalRequests`.
+
+3. `Gasto total`
+
+   * valor: `totalPaidToCollectors`.
+   * Ojo: desde el punto de vista de la empresa/restaurante esto es gasto/pago al recolector, no ingreso.
+
+4. `Completadas`
+
+   * valor: `completedRequests`.
+
+Opcional:
+
+* `Pendientes`, si entra visualmente sin saturar.
+
+### Gráfico principal
+
+Título:
+`Evolución de reciclaje`
+
+Datos:
+
+* `monthlyEvolution`.
+* Línea o barras simples.
+* Últimos 6 meses.
+* Sin librerías nuevas si no son necesarias.
+* Se puede usar SVG o componentes ya existentes.
+
+### Resumen operativo
+
+Mostrar:
+
+* tipo de empresa;
+* RUC;
+* dirección;
+* correo;
+* teléfono;
+* estado;
+* miembro desde.
+
+Formatear teléfono:
+`+51 931 658 522`.
+
+### Solicitudes recientes
+
+Tabla:
+
+* ID;
+* fecha solicitud;
+* fecha programada;
+* volumen;
+* estado;
+* recolector / placa;
+* dirección;
+* botón `Ver todas` o link a `Mis solicitudes`.
+
+No dejar celdas vacías.
+Usar textos controlados:
+
+* `Sin recolector asignado`;
+* `Vehículo no registrado`;
+* `No programada`.
+
+### Gráfico secundario
+
+Si existe tipo de residuo:
+`Composición de residuos`.
+
+Si no existe tipo de residuo:
+`Distribución de solicitudes`.
+
+No inventar categorías.
+
+### Suscripción y facturación
+
+Reutilizar componente existente si ya existe:
+
+`SubscriptionStatusCard`
+
+Mostrar:
+
+* plan;
+* monto S/ 29.90 / mes;
+* estado;
+* prueba gratuita;
+* barra de progreso;
+* fecha inicio;
+* fecha fin;
+* días restantes;
+* botón cancelar si corresponde.
+
+---
+
+# ETAPA 4 — Limpieza de mocks y placeholders
+
+Buscar en frontend y backend:
+
+```txt
+mock
+Mock
+fake
+demo
+placeholder
+Pendiente de integración backend
+285.50
+727.75
+25 L
+40 L
+65 L
+80 L
+Grasa animal
+Restos orgánicos
+Otros
+```
+
+Eliminar cualquier valor hardcodeado en código activo.
+
+No eliminar textos si están en documentación o capturas, solo código funcional.
+
+---
+
+# ETAPA 5 — Validación cruzada contra BD
+
+## Validar con SQL
+
+Reemplazar `ID_EMPRESA` con el ID real de la empresa autenticada.
+
+```sql
+SELECT COUNT(*)
+FROM pickup_requests
+WHERE company_id = ID_EMPRESA;
+```
+
+```sql
+SELECT COUNT(*)
+FROM pickup_requests
+WHERE company_id = ID_EMPRESA
+  AND estado = 'COMPLETADO';
+```
+
+```sql
+SELECT SUM(litros_confirmados)
+FROM pickup_requests
+WHERE company_id = ID_EMPRESA
+  AND estado = 'COMPLETADO';
+```
+
+```sql
+SELECT SUM(monto_total)
+FROM pickup_requests
+WHERE company_id = ID_EMPRESA
+  AND estado = 'COMPLETADO'
+  AND estado_pago = 'PAGADO';
+```
+
+```sql
+SELECT 
+  pr.id,
+  pr.collector_company_id,
+  c.business_name AS collector_name,
+  tu.plate
+FROM pickup_requests pr
+LEFT JOIN companies c ON c.id = pr.collector_company_id
+LEFT JOIN transport_units tu ON tu.company_id = c.id
+WHERE pr.company_id = ID_EMPRESA
+ORDER BY pr.created_at DESC;
+```
+
+Comparar los resultados con el JSON del endpoint y con la pantalla.
+
+---
+
+# ETAPA 6 — Validación técnica
+
+Backend:
+
+```powershell
+cd EcoTacnaSpringBootJPA
+.\mvnw.cmd clean compile
+```
+
+Frontend:
+
+```powershell
+cd EcoTacnaFrontend
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+---
+
+# Validación manual
+
+1. Login como empresa/restaurante.
+2. Ir a `Resumen`.
+3. Confirmar que el endpoint se llama en Network.
+4. Confirmar que no hay datos mock.
+5. Confirmar que las cards coinciden con BD.
+6. Confirmar que el gráfico mensual coincide con solicitudes completadas.
+7. Confirmar que solicitudes recientes muestran recolectora y placa.
+8. Confirmar que la suscripción coincide con “Mi empresa”.
+9. Click en `Solicitar recojo` debe llevar al módulo correcto.
+10. Click en `Ver todas` debe llevar a `Mis solicitudes`.
+
+---
+
+# Restricciones
+
+* No tocar ApiPeruDev.
+* No tocar login.
+* No tocar BCrypt.
+* No tocar SecurityConfig salvo indispensable.
+* No borrar datos de BD.
+* No crear mocks.
+* No inventar categorías de residuos.
+* No inventar litros.
+* No inventar dinero.
+* No romper Solicitar recojo.
+* No romper Mis solicitudes.
+* No romper Seguimiento.
+* No romper Mi empresa.
+* No romper perfil recolector.
+* No duplicar lógica de suscripción si ya existe componente o endpoint.
+* No usar datos de localStorage para métricas.
+* No convertir errores del backend en ceros falsos.
+
+---
+
+# Entregable final
+
+* Archivos modificados.
+* Endpoint creado o ajustado.
+* DTO creado o ajustado.
+* JSON real del endpoint.
+* SQL usado para validar.
+* Captura del panel resumen actualizado.
+* Confirmación de cero mocks en código activo.
+* Backend compile OK.
+* Frontend lint/tsc/build OK.
