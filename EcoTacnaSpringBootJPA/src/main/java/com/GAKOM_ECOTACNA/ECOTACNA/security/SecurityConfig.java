@@ -44,18 +44,22 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/health", "/api/health/**").permitAll()
-                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/registration-status/**").permitAll()
+                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/registration-status/**",
+                                "/api/auth/admin-desktop-login")
+                        .permitAll()
                         .requestMatchers("/api/ruc/**").permitAll()
                         .requestMatchers("/api/public/captcha/**").permitAll()
-                        .requestMatchers("/api/public/plans", "/api/public/checkout/**", "/api/public/payments/simulated/**", "/api/public/landing-stats").permitAll()
-                        .requestMatchers("/", "/index.html", "/dashboard.html", "/css/**", "/js/**", "/uploads/**").permitAll()
+                        .requestMatchers("/api/public/plans", "/api/public/checkout/**",
+                                "/api/public/payments/simulated/**", "/api/public/landing-stats")
+                        .permitAll()
+                        .requestMatchers("/", "/index.html", "/dashboard.html", "/css/**", "/js/**", "/uploads/**")
+                        .permitAll()
 
                         .requestMatchers("/api/empresa/**").hasRole("GENERADOR")
                         .requestMatchers("/api/recolector/**").hasRole("RECOLECTOR")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                        .anyRequest().authenticated()
-                )
+                        .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
